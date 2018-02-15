@@ -68,7 +68,6 @@ var app = express();
 app.listen(port, () => console.log('listening on port', port))
 
 app.get('/', function (req, res) {
-    //res.sendFile(path.join(__dirname + '/index.html'));
     res.sendFile('index.html', { root: path.join(__dirname, '../public') });
 });
 
