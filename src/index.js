@@ -15,7 +15,7 @@ let file, port;
 (argv.port) ? port = argv.port : port = 8000;
 
 if (!fs.existsSync(file)) {
-    throw new Error("File " + file + " does not exist.");
+    throw new Error(`File ${file} does not exist.`);
 }
 
 let geoJSON = {
@@ -65,7 +65,7 @@ rl.on('line', function (line) {
 });
 
 var app = express();
-app.listen(port, () => console.log('listening on port', port))
+app.listen(port, () => console.log(`listening on localhost:${port}`));
 
 app.get('/', function (req, res) {
     res.sendFile('index.html', { root: path.join(__dirname, '../public') });
