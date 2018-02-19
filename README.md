@@ -1,5 +1,5 @@
-<h1 align="center">
-  <a href="https://github.com/egladman/GeoMapSSH"><img src="docs/img/marker.svg" alt="GeoMapSSH" width="200"></a>
+<h1 align="center
+  <a href="https://github.com/egladman/GeoMapSSH"><img src="docs/img/marker.svg" alt="GeoMapSSH" height="200"></a>
   <br>
   GeoMapSSH
   <br>
