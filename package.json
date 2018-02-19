@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node src/index.js"
+    "start": "nodemon src/index.js"
   },
   "repository": {
     "type": "git",
@@ -21,5 +21,8 @@
     "express": "^4.16.2",
     "geoip-lite": "^1.2.1",
     "yargs": "^11.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^1.15.1"
   }
 }
