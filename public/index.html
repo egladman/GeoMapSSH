@@ -13,6 +13,13 @@
 </head>
 <body>
 
+<style>
+    .mapboxgl-popup {
+        max-width: 400px;
+        font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+    }
+</style>
+
 <div id='map'></div>
 <script>
 mapboxgl.accessToken = 'pk.eyJ1IjoiZWdsYWRtYW4iLCJhIjoiY2pkb3QxMDVnMHEwZTJ4cXA3c3ducmVvayJ9.K0_xn7FBBKjfCYntoyH3mg';
@@ -31,13 +38,58 @@ map.on('load', function () {
 
     map.addSource('drone', { type: 'geojson', data: url });
     map.addLayer({
-        "id": "loginAttempt",
+        "id": "loginAttempts",
         "type": "symbol",
         "source": "drone",
         "layout": {
             "icon-image": "marker-15"
         }
     });
+});
+
+// Create a popup, but don't add it to the map yet.
+var popup = new mapboxgl.Popup({
+    closeButton: false,
+    closeOnClick: false
+});
+
+map.on('mouseenter', 'loginAttempts', function(e) {
+    // Change the cursor style as a UI indicator.
+    map.getCanvas().style.cursor = 'pointer';
+
+    var coordinates = e.features[0].geometry.coordinates.slice();
+    var ipAddress = e.features[0].properties.ip;
+    var userName = e.features[0].properties.user;
+    var sshPort = e.features[0].properties.port;
+    var timeStamp = e.features[0].properties.time;
+    var timeZone = e.features[0].properties.timeZone;
+
+
+    // Ensure that if the map is zoomed out such that multiple
+    // copies of the feature are visible, the popup appears
+    // over the copy being pointed to.
+    while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+        coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+    }
+
+    // Populate the popup and set its coordinates
+    // based on the feature found.
+
+    var contents = [
+        'ip: ' + ipAddress,
+        'user: ' + userName,
+        'port: ' + sshPort,
+        'time: ' + timeStamp,
+        'time zone: ' + timeZone
+    ];
+    popup.setLngLat(coordinates)
+         .setHTML(contents.join("<br />"))
+         .addTo(map);
+});
+
+map.on('mouseleave', 'loginAttempts', function() {
+    map.getCanvas().style.cursor = '';
+    popup.remove();
 });
 </script>
 
