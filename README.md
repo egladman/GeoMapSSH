@@ -31,6 +31,6 @@ npm start
 ### Advanced
 
 ```
-npm start -- -l docs/example -p 3030
-npm start -- --log docs/example --port 3030
+npm start -- -d -l docs/example -p 3030
+npm start -- --debug --log docs/example --port 3030
 ```
