@@ -3,16 +3,19 @@ const lineReader = require('readline');
 const path = require('path');
 const express = require('express');
 const geoip = require('geoip-lite');
+const chalk = require('chalk');
 const argv = require('yargs')
       .usage('Usage: $0 -p [num] -p [str]')
       .alias('h', 'help')
       .alias('l', 'log')
       .alias('p', 'port')
+      .alias('d', 'debug')
       .argv;
 
-let file, port;
+let file, port, debug;
 (argv.log) ? file = argv.log : file = "/var/log/auth.log";
 (argv.port) ? port = argv.port : port = 8000;
+(argv.debug) ? debug = true : debug = false;
 
 if (!fs.existsSync(file)) {
     throw new Error(`File ${file} does not exist.`);
@@ -45,7 +48,12 @@ rl.on('line', function (line) {
 
     let coordinates;
     let lookup = geoip.lookup(ipAddress);
-    (lookup === null) ? coordinates = [] : coordinates = lookup.ll;
+    if (lookup === null) {
+        _debug(`address lookup failed for ${ipAddress}`, 'warning');
+        coordinates = [];
+    } else {
+        coordinates = lookup.ll.reverse();
+    }
 
     let feature = {
         "type": "Feature",
@@ -54,8 +62,7 @@ rl.on('line', function (line) {
             "coordinates": coordinates
         },
         "properties": {
-            "time": timeStamp,
-            "timeZone": Intl.DateTimeFormat().resolvedOptions().timeZone,
+            "time": `${timeStamp} ${Intl.DateTimeFormat().resolvedOptions().timeZone}`,
             "ip": ipAddress,
             "user": userName,
             "port": sshPort
@@ -64,13 +71,32 @@ rl.on('line', function (line) {
     geoJSON.features.push(feature);
 });
 
-var app = express();
+//Routes
+let app = express();
 app.listen(port, () => console.log(`listening on localhost:${port}`));
 
 app.get('/', function (req, res) {
     res.sendFile('index.html', { root: path.join(__dirname, '../public') });
 });
 
-app.get('/features', function (req, res) {
+app.get('/api/v1/ssh/attempts', function (req, res) {
     res.send(JSON.stringify(geoJSON));
 });
+
+//Helpers
+function _debug(message, severity) {
+    if (!debug) return;
+
+    switch (severity) {
+    case 'fatal':
+        message = message.replace(/^/, chalk.red('FATAL: '));
+        break;
+    case 'warning':
+        message = message.replace(/^/, chalk.yellow('WARNING: '));
+        break;
+    default:
+        throw new Error(`severity: ${severity} is not supported.`)
+    }
+    console.log(message);
+    if (severity === 'fatal') process.exit(1);
+}

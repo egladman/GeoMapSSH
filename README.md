@@ -30,8 +30,6 @@ npm start
 
 ### Advanced
 
-When overwriting the default port it's currently necessary to update the value in `public/index.html`
-
 ```
 npm start -- -l docs/example -p 3030
 npm start -- --log docs/example --port 3030

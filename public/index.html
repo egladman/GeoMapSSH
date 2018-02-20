@@ -22,6 +22,7 @@
 
 <div id='map'></div>
 <script>
+//Before you get your panties in a bunch, this is a public token that mapbox gives out to everyone
 mapboxgl.accessToken = 'pk.eyJ1IjoiZWdsYWRtYW4iLCJhIjoiY2pkb3QxMDVnMHEwZTJ4cXA3c3ducmVvayJ9.K0_xn7FBBKjfCYntoyH3mg';
 var map = new mapboxgl.Map({
     container: 'map',
@@ -30,7 +31,7 @@ var map = new mapboxgl.Map({
     zoom: 1
 });
 
-var url = 'http://localhost:8000/features';
+var url = '/api/v1/ssh/attempts';
 map.on('load', function () {
     window.setInterval(function() {
         map.getSource('drone').setData(url);
@@ -62,8 +63,6 @@ map.on('mouseenter', 'loginAttempts', function(e) {
     var userName = e.features[0].properties.user;
     var sshPort = e.features[0].properties.port;
     var timeStamp = e.features[0].properties.time;
-    var timeZone = e.features[0].properties.timeZone;
-
 
     // Ensure that if the map is zoomed out such that multiple
     // copies of the feature are visible, the popup appears
@@ -72,15 +71,22 @@ map.on('mouseenter', 'loginAttempts', function(e) {
         coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
     }
 
+    // Round coordinates for improved readability
+    var coordinatesRounded = [];
+    var x = 0;
+    while(x < coordinates.length){
+        coordinatesRounded[x] = coordinates[x].toFixed(2);
+        x++;
+    }
+
     // Populate the popup and set its coordinates
     // based on the feature found.
-
     var contents = [
         'ip: ' + ipAddress,
+        'coordinates: ' + coordinatesRounded.join(', '),
         'user: ' + userName,
         'port: ' + sshPort,
-        'time: ' + timeStamp,
-        'time zone: ' + timeZone
+        'time: ' + timeStamp
     ];
     popup.setLngLat(coordinates)
          .setHTML(contents.join("<br />"))
