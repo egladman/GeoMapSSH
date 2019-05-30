@@ -13,6 +13,9 @@
 </head>
 <body>
 
+<!-- Initalize GeoMapSSH global JS object  -->
+<script type="text/javascript" src="http://localhost:8000/api/v1/session"></script>
+
 <style>
     .mapboxgl-popup {
         max-width: 400px;
@@ -30,7 +33,7 @@ var map = new mapboxgl.Map({
     zoom: 1
 });
 
-var url = 'http://localhost:8000/features';
+var url = 'http://localhost:8000/api/v1/features';
 map.on('load', function () {
     window.setInterval(function() {
         map.getSource('drone').setData(url);
@@ -57,17 +60,10 @@ map.on('mouseenter', 'loginAttempts', function(e) {
     // Change the cursor style as a UI indicator.
     map.getCanvas().style.cursor = 'pointer';
 
-    var coordinates = e.features[0].geometry.coordinates.slice();
-    var ipAddress = e.features[0].properties.ip;
-    var userName = e.features[0].properties.user;
-    var sshPort = e.features[0].properties.port;
-    var timeStamp = e.features[0].properties.time;
-    var timeZone = e.features[0].properties.timeZone;
-
-
     // Ensure that if the map is zoomed out such that multiple
     // copies of the feature are visible, the popup appears
     // over the copy being pointed to.
+    var coordinates = e.features[0].geometry.coordinates.slice();
     while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
         coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
     }
@@ -76,11 +72,11 @@ map.on('mouseenter', 'loginAttempts', function(e) {
     // based on the feature found.
 
     var contents = [
-        'ip: ' + ipAddress,
-        'user: ' + userName,
-        'port: ' + sshPort,
-        'time: ' + timeStamp,
-        'time zone: ' + timeZone
+        'ip: ' + e.features[0].properties.ip,
+        'user: ' + e.features[0].properties.user,
+        'port: ' + e.features[0].properties.port,
+        'time: ' + e.features[0].properties.time,
+	'attempts: ' + e.features[0].properties.attempts
     ];
     popup.setLngLat(coordinates)
          .setHTML(contents.join("<br />"))

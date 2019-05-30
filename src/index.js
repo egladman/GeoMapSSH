@@ -3,6 +3,7 @@ const lineReader = require('readline');
 const path = require('path');
 const express = require('express');
 const geoip = require('geoip-lite');
+const Utils = require('./utils');
 const argv = require('yargs')
       .usage('Usage: $0 -p [num] -p [str]')
       .alias('h', 'help')
@@ -10,23 +11,56 @@ const argv = require('yargs')
       .alias('p', 'port')
       .argv;
 
-let file, port;
-(argv.log) ? file = argv.log : file = "/var/log/auth.log";
-(argv.port) ? port = argv.port : port = 8000;
+let utils = new Utils();
 
-if (!fs.existsSync(file)) {
-    throw new Error(`File ${file} does not exist.`);
-}
+let session = {
+    default: {
+        lastLineRead: -1,
+        log: '/var/log/auth.log',
+        port: 8000,
+	apiVersion: 'v1',
+	timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+	meta: {
+	    lastModified: Math.floor(Date.now() / 1000) // Epoch time
+	}
+    },
+    current: {
+        // This object is dynamically built
+    }
+};
+Object.freeze(session.default); // Guarantees no funny business
+
+if (typeof session.current.lastLineRead === 'undefined') session.current.lastLineRead = session.default.lastLineRead;
+
+(argv.log) ? session.current.log = argv.log : session.current.log = session.default.log;
+(argv.port) ? session.current.port = argv.port :  session.current.port = session.default.port;
+
+if (!fs.existsSync(session.current.log)) { // Sanity Check
+    throw new Error(`File ${session.current.log} does not exist.`);
+    process.exit(1);
+};
+
+
+let sessionAbsPath = path.join(__dirname, '../public', '.session.js');
+
+utils.debug(`Session Absolute Path: ${sessionAbsPath}`)
+
+fs.writeFileSync(sessionAbsPath, `GeoMapSSH = ${JSON.stringify(session)}`, (err) => {
+    if (err) throw err;
+    util.debug(`${sessionAbsPath} written.`)
+});
+
+utils.debug(JSON.stringify(session));
 
 let geoJSON = {
     "type": "FeatureCollection",
     "features": []
 };
 
-const rl = lineReader.createInterface({
-    input: fs.createReadStream(file)
-});
-rl.on('line', function (line) {
+const rl = lineReader.createInterface({                                                                                            
+    input: fs.createReadStream(session.current.log)
+});  
+rl.on('line', (line) => {
     if ( line.indexOf("Failed password") === 0 ) return; //Only look for failed password attempts
 
     let timeStamp, ipAddress, sshPort, userName;
@@ -43,6 +77,8 @@ rl.on('line', function (line) {
 
     timeStamp = "".concat(arr[0], " ", arr[1], " ", arr[2]); //Not the most elegant solution...
 
+    let loginAttemptsCount = 0;
+
     let coordinates;
     let lookup = geoip.lookup(ipAddress);
     (lookup === null) ? coordinates = [] : coordinates = lookup.ll;
@@ -55,22 +91,36 @@ rl.on('line', function (line) {
         },
         "properties": {
             "time": timeStamp,
-            "timeZone": Intl.DateTimeFormat().resolvedOptions().timeZone,
             "ip": ipAddress,
             "user": userName,
-            "port": sshPort
+            "port": sshPort,
+            "attempts": loginAttemptsCount
         }
     };
-    geoJSON.features.push(feature);
+  geoJSON.features.push(feature);
+});
+
+fs.watch(session.current.log, { encoding: 'buffer' }, (eventType, fileName) => {
+    if (eventType === "change") {                                                                                                          
+        utils.debug(`${session.current.log} changed!`)
+    }                                                                                                                                      
 });
 
 var app = express();
-app.listen(port, () => console.log(`listening on localhost:${port}`));
+app.listen(session.current.port, () => utils.log(`listening on localhost:${session.current.port}`));
 
-app.get('/', function (req, res) {
-    res.sendFile('index.html', { root: path.join(__dirname, '../public') });
+app.get('/', (req, res) => {
+    const options = {
+        root: path.join(__dirname, '../public')
+    };
+    res.sendFile('index.html', options);
 });
 
-app.get('/features', function (req, res) {
-    res.send(JSON.stringify(geoJSON));
+app.get(`/api/${session.default.apiVersion}/session`, (req, res) => {
+    const options = {
+        dotfiles: 'allow'
+    };
+    res.sendFile(sessionAbsPath, options);
 });
+
+app.get(`/api/${session.default.apiVersion}/features`, (req, res) => res.send(JSON.stringify(geoJSON)));
