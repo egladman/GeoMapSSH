@@ -109,7 +109,7 @@ fs.watch(session.current.log, { encoding: 'buffer' }, (eventType, fileName) => {
 var app = express();
 app.listen(session.current.port, () => utils.log(`listening on localhost:${session.current.port}`));
 
-const apiBaseUrl = `/api/${session.default.apiVersion}`;
+const apiBasePath = `/api/${session.default.apiVersion}`;
 
 app.get('/', (req, res) => {
     const options = {
@@ -118,12 +118,12 @@ app.get('/', (req, res) => {
     res.sendFile('index.html', options);
 });
 
-app.get(`${apiBaseUrl}/session`, (req, res) => {
+app.get(`${apiBasePath}/session`, (req, res) => {
     const options = {
         dotfiles: 'allow'
     };
     res.sendFile(sessionAbsPath, options);
 });
 
-app.get(`${apiBaseUrl}/features`, (req, res) => res.send(JSON.stringify(geoJSON)));
+app.get(`${apiBasePath}/features`, (req, res) => res.send(JSON.stringify(geoJSON)));
 
