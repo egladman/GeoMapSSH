@@ -3,7 +3,9 @@ const lineReader = require('readline');
 const path = require('path');
 const express = require('express');
 const geoip = require('geoip-lite');
+const _ = require('lodash');
 const Utils = require('./utils');
+const Parse = require('./parse');
 const argv = require('yargs')
       .usage('Usage: $0 -p [num] -p [str]')
       .alias('h', 'help')
@@ -12,6 +14,7 @@ const argv = require('yargs')
       .argv;
 
 let utils = new Utils();
+let parse = new Parse();
 
 let session = {
     default: {
@@ -40,7 +43,6 @@ if (!fs.existsSync(session.current.log)) { // Sanity Check
     process.exit(1);
 };
 
-
 let sessionAbsPath = path.join(__dirname, '../public', '.session.js');
 
 utils.debug(`Session Absolute Path: ${sessionAbsPath}`)
@@ -57,47 +59,43 @@ let geoJSON = {
     "features": []
 };
 
-const rl = lineReader.createInterface({                                                                                            
-    input: fs.createReadStream(session.current.log)
+let ipAddresses = [];
+
+let rl = lineReader.createInterface({                                                                                            
+    input: fs.createReadStream(session.current.log),
+    crlfDelay: Infinity
 });  
 rl.on('line', (line) => {
-    if ( line.indexOf("Failed password") === 0 ) return; //Only look for failed password attempts
+    parse.line('Failed password', line, (propertiesObj) => {
+	let lookupObj;
+        let lookupGeoLocation = new Promise((resolve, reject) => {
+	    lookupObj = geoip.lookup(propertiesObj.ip)
+            //resolve(lookupObj);
 
-    let timeStamp, ipAddress, sshPort, userName;
-    let arr = line.split(" ");
+            if (typeof lookupObj !== 'object' || lookupObj === null) {
+	        reject();
+	    } else {
+	        resolve(lookupObj);
+	    }
+        });
 
-    let i = arr.indexOf('from');
-    ipAddress = arr[i+1];
+        lookupGeoLocation.then(() => { 
+	    let featureObjDefault = {
+                "geometry": {
+                    "coordinates": lookupObj.ll
+                }
+            }
 
-    let j = arr.indexOf('port');
-    sshPort = arr[j+1];
+	    //let featureObjDefault.geometry.coordinates = lookupObj.ll;
 
-    let k = arr.indexOf('for');
-    userName = arr[k+1];
-
-    timeStamp = "".concat(arr[0], " ", arr[1], " ", arr[2]); //Not the most elegant solution...
-
-    let loginAttemptsCount = 0;
-
-    let coordinates;
-    let lookup = geoip.lookup(ipAddress);
-    (lookup === null) ? coordinates = [] : coordinates = lookup.ll;
-
-    let feature = {
-        "type": "Feature",
-        "geometry": {
-            "type": "Point",
-            "coordinates": coordinates
-        },
-        "properties": {
-            "time": timeStamp,
-            "ip": ipAddress,
-            "user": userName,
-            "port": sshPort,
-            "attempts": loginAttemptsCount
-        }
-    };
-  geoJSON.features.push(feature);
+            const featureObjNew = utils.buildFeatureObj(propertiesObj);
+	    const featureObj = _.merge(featureObjDefault, featureObjNew);
+            
+	    utils.debug(JSON.stringify(featureObj));
+            geoJSON.features.push(featureObj);
+        });
+    
+    });
 });
 
 fs.watch(session.current.log, { encoding: 'buffer' }, (eventType, fileName) => {

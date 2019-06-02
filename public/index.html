@@ -78,6 +78,8 @@ map.on('mouseenter', 'loginAttempts', function(e) {
         'time: ' + e.features[0].properties.time,
 	'attempts: ' + e.features[0].properties.attempts
     ];
+
+    console.log(contents)
     popup.setLngLat(coordinates)
          .setHTML(contents.join("<br />"))
          .addTo(map);
