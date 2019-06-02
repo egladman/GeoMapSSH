@@ -28,7 +28,6 @@ Parse.prototype.line = function (keyWord, line, callback) {
     let i, ip;
     i = lineArray.indexOf('from');
     ip = lineArray[i+1];
-    //ipAddresses.push(ip); // Collect all IPs
 
     let j, port;
     j = lineArray.indexOf('port');
@@ -50,6 +49,5 @@ Parse.prototype.line = function (keyWord, line, callback) {
         callback(obj);
     }
 }
-
 
 module.exports = Parse;
