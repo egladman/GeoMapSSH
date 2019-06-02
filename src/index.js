@@ -1,10 +1,11 @@
 const fs = require('fs');
+const util = require('util');
+const _ = require('lodash');
 const lineReader = require('readline');
 const path = require('path');
 const express = require('express');
 const geoip = require('geoip-lite');
-const _ = require('lodash');
-const Utils = require('./utils');
+const Helpers = require('./helpers');
 const Parse = require('./parse');
 const argv = require('yargs')
       .usage('Usage: $0 -p [num] -p [str]')
@@ -13,8 +14,13 @@ const argv = require('yargs')
       .alias('p', 'port')
       .argv;
 
-let utils = new Utils();
+let helpers = new Helpers();
 let parse = new Parse();
+const setTimeoutPromise = util.promisify(setTimeout);
+
+let isReadLineReadyMutex = false;
+const readLineInterval = 300000; // 5 minutes in milliseconds
+
 
 let session = {
     default: {
@@ -45,67 +51,77 @@ if (!fs.existsSync(session.current.log)) { // Sanity Check
 
 let sessionAbsPath = path.join(__dirname, '../public', '.session.js');
 
-utils.debug(`Session Absolute Path: ${sessionAbsPath}`)
+helpers.debug(`Session Absolute Path: ${sessionAbsPath}`)
 
 fs.writeFileSync(sessionAbsPath, `GeoMapSSH = ${JSON.stringify(session)}`, (err) => {
     if (err) throw err;
-    util.debug(`${sessionAbsPath} written.`)
+    helpers.debug(`${sessionAbsPath} written.`)
 });
 
-utils.debug(JSON.stringify(session));
+helpers.debug(JSON.stringify(session));
 
 let geoJSON = {
     "type": "FeatureCollection",
     "features": []
 };
 
-let ipAddresses = [];
+function initLineReader() {
+    isReadLineReadyMutex = false;
 
-let rl = lineReader.createInterface({                                                                                            
-    input: fs.createReadStream(session.current.log),
-    crlfDelay: Infinity
-});  
-rl.on('line', (line) => {
-    parse.line('Failed password', line, (propertiesObj) => {
-	let lookupObj;
-        let lookupGeoLocation = new Promise((resolve, reject) => {
-	    lookupObj = geoip.lookup(propertiesObj.ip)
-            //resolve(lookupObj);
+    let rl = lineReader.createInterface({                                                                                            
+        input: fs.createReadStream(session.current.log),
+        crlfDelay: Infinity
+    });  
+    rl.on('line', (line) => {
+        parse.line('Failed password', line, (propertiesObj) => {
+	    let lookupObj;
+            let lookupGeoLocation = new Promise((resolve, reject) => {
+	        lookupObj = geoip.lookup(propertiesObj.ip)
 
-            if (typeof lookupObj !== 'object' || lookupObj === null) {
-	        reject();
-	    } else {
-	        resolve(lookupObj);
-	    }
-        });
+                if (typeof lookupObj !== 'object' || lookupObj === null) {
+	            reject();
+	        } else {
+	            resolve(lookupObj);
+	        }
+            });
 
-        lookupGeoLocation.then(() => { 
-	    let featureObjDefault = {
-                "geometry": {
-                    "coordinates": lookupObj.ll
+            lookupGeoLocation.then(() => { 
+	        let featureObjDefault = {
+                    "geometry": {
+                        "coordinates": lookupObj.ll
+                    }
                 }
-            }
 
-	    //let featureObjDefault.geometry.coordinates = lookupObj.ll;
-
-            const featureObjNew = utils.buildFeatureObj(propertiesObj);
-	    const featureObj = _.merge(featureObjDefault, featureObjNew);
+                const featureObjNew = helpers.buildFeatureObj(propertiesObj);
+	        const featureObj = _.merge(featureObjDefault, featureObjNew);
             
-	    utils.debug(JSON.stringify(featureObj));
-            geoJSON.features.push(featureObj);
-        });
+	        helpers.debug(JSON.stringify(featureObj));
+                geoJSON.features.push(featureObj);
+            });
     
+        });
     });
-});
+
+    rl.on('close', () => {
+        setTimeoutPromise(readLineInterval, true).then ((value) => {
+	    isReadLineReadyMutex = value;
+	    helpers.debug(`Mutex returned ${value}. Ready!`)
+	});	
+    });
+};
+initLineReader();
 
 fs.watch(session.current.log, { encoding: 'buffer' }, (eventType, fileName) => {
-    if (eventType === "change") {                                                                                                          
-        utils.debug(`${session.current.log} changed!`)
-    }                                                                                                                                      
+    if (eventType === "change" && isReadLineReadyMutex === true) {
+	helpers.debug(`File: ${session.current.log} was modified! Mutex returned true. Calling initLineReader()`);
+	initLineReader();
+    } else if (eventType === "change") {
+        helpers.debug(`File: ${session.current.log} was modified! But mutex returned false. Going back to sleep...`)
+    }
 });
 
 var app = express();
-app.listen(session.current.port, () => utils.log(`listening on localhost:${session.current.port}`));
+app.listen(session.current.port, () => helpers.log(`listening on localhost:${session.current.port}`));
 
 const apiBasePath = `/api/${session.default.apiVersion}`;
 
