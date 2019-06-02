@@ -20,6 +20,7 @@
   "dependencies": {
     "express": "^4.16.2",
     "geoip-lite": "^1.2.1",
+    "lodash": "^4.17.11",
     "yargs": "^11.0.0"
   },
   "devDependencies": {
