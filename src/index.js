@@ -19,6 +19,7 @@ let parse = new Parse();
 const setTimeoutPromise = util.promisify(setTimeout);
 
 let isReadLineReadyMutex = false;
+let isReadLineQueuedMutex = false;
 const readLineInterval = 300000; // 5 minutes in milliseconds
 
 
@@ -68,6 +69,7 @@ let geoJSON = {
 
 function initLineReader() {
     isReadLineReadyMutex = false;
+    isReadLineQueuedMutex = false;
     let count = 0;
     let skip = false;
 
@@ -111,14 +113,12 @@ function initLineReader() {
     rl.on('close', () => {
         setTimeoutPromise(readLineInterval, true).then ((value) => {
 	    isReadLineReadyMutex = value;
-            helpers.debug(`Mutex returned ${value}. Ready!`)
-
-            // Note
-            // In its current implementation there's an edge-case where the lastest file changes
-	    // won't be picked-up if changes occue while the mutex returns false. Once the file is
-	    // modified again while the mutex returns true, the changes will be be picked up. As
-	    // long as we're good with the data potentially being stale for a limited time, then
-            // it's not a big deal...
+            helpers.debug(`isReadLineReadyMutex returned ${value}. Ready!`)
+	    
+	    if (isReadLineQueuedMutex === true) {
+	        helpers.debug(`File: ${session.current.log} was modified during timeout! Calling initLineReader()`);
+		initLineReader();
+	    };
 	});
 
 	const fd = fs.openSync(session.current.log, 'r+');
@@ -128,7 +128,7 @@ function initLineReader() {
             if (err) {
                 helpers.error(err.message);
             } else if (session.current.logSize < stats.size && session.current.logSize !== -1) {
-	        helpers.debug(`File has shrunk. The log must've been rotated!`);
+	        helpers.debug(`File: ${session.current.log} has shrunk. The file must've been rotated!`);
 		session.current.lastLineRead = 0;
 	    } else {
                 helpers.countFileLines(session.current.log, (value) => {
@@ -144,10 +144,11 @@ initLineReader();
 
 fs.watch(session.current.log, { encoding: 'buffer' }, (eventType, fileName) => {
     if (eventType === "change" && isReadLineReadyMutex === true) {
-	helpers.debug(`File: ${session.current.log} was modified! Mutex returned true. Calling initLineReader()`);
+	helpers.debug(`File: ${session.current.log} was modified! isReadLineReadyMutex returned true. Calling initLineReader()`);
 	initLineReader();
     } else if (eventType === "change") {
-        helpers.debug(`File: ${session.current.log} was modified! But mutex returned false. Going back to sleep...`)
+	isReadLineQueuedMutex = true;
+        helpers.debug(`File: ${session.current.log} was modified! isReadLineReadyMutex returned false. Going back to sleep...`)
     }
 });
 
