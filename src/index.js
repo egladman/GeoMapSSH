@@ -114,7 +114,7 @@ function initLineReader() {
             helpers.debug(`Mutex returned ${value}. Ready!`)
 
             // Note
-            // In it's current implementation there's an edge-case where the lastest file changes
+            // In its current implementation there's an edge-case where the lastest file changes
 	    // won't be picked-up if changes occue while the mutex returns false. Once the file is
 	    // modified again while the mutex returns true, the changes will be be picked up. As
 	    // long as we're good with the data potentially being stale for a limited time, then
