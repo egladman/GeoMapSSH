@@ -26,6 +26,7 @@ let session = {
     default: {
         lastLineRead: -1,
         log: '/var/log/auth.log',
+	logSize: -1,
         port: 8000,
 	apiVersion: 'v1',
 	timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -67,13 +68,18 @@ let geoJSON = {
 
 function initLineReader() {
     isReadLineReadyMutex = false;
+    let count = 0;
+    let skip = false;
 
     let rl = lineReader.createInterface({                                                                                            
         input: fs.createReadStream(session.current.log),
         crlfDelay: Infinity
     });  
     rl.on('line', (line) => {
-        parse.line('Failed password', line, (propertiesObj) => {
+	count++;
+	(count <= session.current.lastLineRead) ? skip = true : helpers.debug(`Starting read from line: ${count}`);
+
+        if (skip === false) parse.line('Failed password', line, (propertiesObj) => {
 	    let lookupObj;
             let lookupGeoLocation = new Promise((resolve, reject) => {
 	        lookupObj = geoip.lookup(propertiesObj.ip)
@@ -105,8 +111,33 @@ function initLineReader() {
     rl.on('close', () => {
         setTimeoutPromise(readLineInterval, true).then ((value) => {
 	    isReadLineReadyMutex = value;
-	    helpers.debug(`Mutex returned ${value}. Ready!`)
-	});	
+            helpers.debug(`Mutex returned ${value}. Ready!`)
+
+            // Note
+            // In it's current implementation there's an edge-case where the lastest file changes
+	    // won't be picked-up if changes occue while the mutex returns false. Once the file is
+	    // modified again while the mutex returns true, the changes will be be picked up. As
+	    // long as we're good with the data potentially being stale for a limited time, then
+            // it's not a big deal...
+	});
+
+	const fd = fs.openSync(session.current.log, 'r+');
+	fs.fstat(fd, (err, stats) => {
+            (err) ? helpers.error(err.message) : session.current.logSize = stats.size;
+
+            if (err) {
+                helpers.error(err.message);
+            } else if (session.current.logSize < stats.size && session.current.logSize !== -1) {
+	        helpers.debug(`File has shrunk. The log must've been rotated!`);
+		session.current.lastLineRead = 0;
+	    } else {
+                helpers.countFileLines(session.current.log, (value) => {
+                    session.current.lastLineRead = value;
+                    helpers.debug(`Last read from line: ${session.current.lastLineRead}`)
+                });
+	    }
+	});
+
     });
 };
 initLineReader();
