@@ -22,7 +22,6 @@ let isReadLineReadyMutex = false;
 let isReadLineQueuedMutex = false;
 const readLineInterval = 300000; // 5 minutes in milliseconds
 
-
 let session = {
     default: {
         lastLineRead: -1,
@@ -79,7 +78,7 @@ function initLineReader() {
     });  
     rl.on('line', (line) => {
 	count++;
-	(count <= session.current.lastLineRead) ? skip = true : helpers.debug(`Starting read from line: ${count}`);
+	(count <= session.current.lastLineRead) ? skip = true : helpers.debug(`Resuming read from line: ${count}`);
 
         if (skip === false) parse.line('Failed password', line, (propertiesObj) => {
 	    let lookupObj;
@@ -114,40 +113,37 @@ function initLineReader() {
         setTimeoutPromise(readLineInterval, true).then ((value) => {
 	    isReadLineReadyMutex = value;
             helpers.debug(`isReadLineReadyMutex returned ${value}. Ready!`)
-	    
+
 	    if (isReadLineQueuedMutex === true) {
 	        helpers.debug(`File: ${session.current.log} was modified during timeout! Calling initLineReader()`);
 		initLineReader();
 	    };
 	});
 
-	const fd = fs.openSync(session.current.log, 'r+');
-	fs.fstat(fd, (err, stats) => {
-            (err) ? helpers.error(err.message) : session.current.logSize = stats.size;
-
-            if (err) {
-                helpers.error(err.message);
-            } else if (session.current.logSize < stats.size && session.current.logSize !== -1) {
-	        helpers.debug(`File: ${session.current.log} has shrunk. The file must've been rotated!`);
-		session.current.lastLineRead = 0;
-	    } else {
-                helpers.countFileLines(session.current.log, (value) => {
-                    session.current.lastLineRead = value;
-                    helpers.debug(`Last read from line: ${session.current.lastLineRead}`)
-                });
-	    }
-	});
-
+	if (session.current.logSizeCached < session.current.logSizeLatest || typeof session.current.logSizeCached  === 'undefined') {
+	    helpers.countFileLines(session.current.log, (value) => {
+                let str;
+		(session.current.lastLineRead === -1) ? str = "" : str = `File: ${session.current.log} increased in size. `; 
+		session.current.lastLineRead = value;
+                helpers.debug(`${str}Setting lastLineRead to ${session.current.lastLineRead}`)
+            });
+	} else { // File shrunk in size
+            session.current.lastLineRead = -1; // Reset count
+            helpers.debug(`File: ${session.current.log} decreased in size; logs must've rotated. Setting lastLineRead to ${session.current.lastLineRead}`);
+	}
     });
 };
 initLineReader();
 
-fs.watch(session.current.log, { encoding: 'buffer' }, (eventType, fileName) => {
-    if (eventType === "change" && isReadLineReadyMutex === true) {
-	helpers.debug(`File: ${session.current.log} was modified! isReadLineReadyMutex returned true. Calling initLineReader()`);
-	initLineReader();
-    } else if (eventType === "change") {
-	isReadLineQueuedMutex = true;
+fs.watchFile(session.current.log, (curr, prev) => {
+    session.current.logSizeCached = prev.size;
+    session.current.logSizeLatest = curr.size;
+
+    if (isReadLineReadyMutex === true) {
+        helpers.debug(`File: ${session.current.log} was modified! isReadLineReadyMutex returned true. Calling initLineReader()`);
+        initLineReader();
+    } else {
+        isReadLineQueuedMutex = true;
         helpers.debug(`File: ${session.current.log} was modified! isReadLineReadyMutex returned false. Going back to sleep...`)
     }
 });
