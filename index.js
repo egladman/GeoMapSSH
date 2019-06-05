@@ -5,8 +5,8 @@ const lineReader = require('readline');
 const path = require('path');
 const express = require('express');
 const geoip = require('geoip-lite');
-const Helpers = require('./helpers');
-const Parse = require('./parse');
+const Helpers = require('./lib/helpers');
+const Parse = require('./lib/parse');
 const argv = require('yargs')
       .usage('Usage: $0 -p [num] -p [str]')
       .alias('h', 'help')
@@ -50,7 +50,7 @@ if (!fs.existsSync(session.current.log)) { // Sanity Check
     process.exit(1);
 };
 
-let sessionAbsPath = path.join(__dirname, '../public', '.session.js');
+let sessionAbsPath = path.join(__dirname, './public', '.session.js');
 
 helpers.debug(`Session Absolute Path: ${sessionAbsPath}`)
 
