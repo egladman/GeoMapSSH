@@ -1,12 +1,15 @@
 const faker = require('faker');
 const fs = require('fs');
+const util = require('util');
+
+const setTimeoutPromise = util.promisify(setTimeout);
 
 function Generate() {
   // Fuck it, Ship it.
   this.callbackAccumulatorCount = 0;
 };
 
-Generate.prototype.log = function (format, path, limit) {
+Generate.prototype.log = function (format, path, limit, writeInterval) {
     let self = this;
 
     if (typeof format !== "string") {
@@ -22,15 +25,24 @@ Generate.prototype.log = function (format, path, limit) {
         throw new Error('Generate.log expects type: number for "count"');
     };
 
+    if (typeof writeInterval !== "undefined" && typeof writeInterval !== "number") { // OPTIONAL: How often should we write to the file?
+        throw new Error('Generate.log expects type: number for "writeInterval"');
+    };
+
     if (format !== 'auth.log') { // Right now only /var/log/auth.log is supported...
         throw new Error(`Unsupported format: ${type}`);
     };
 
-    const callbackAccumulatorLimit = limit; 
-    self.line(self.callbackAccumulatorCount, callbackAccumulatorLimit);
+    const callbackAccumulatorLimit = limit;
+
+    if (typeof writeInterval !== 'undefined') {
+        self.line(self.callbackAccumulatorCount, callbackAccumulatorLimit, writeInterval);
+    } else {
+        self.line(self.callbackAccumulatorCount, callbackAccumulatorLimit);
+    }
 };
 
-Generate.prototype.line = function(callbackCount, callbackLimit, callback) {
+Generate.prototype.line = function(callbackCount, callbackLimit, interval, callback) {
     // Returns a string with the following format
     // Feb 18 23:08:26 izxvps sshd[5768]: Failed password for root from 82.156.51.228 port 38156 ssh2
 
@@ -45,13 +57,10 @@ Generate.prototype.line = function(callbackCount, callbackLimit, callback) {
 	hourCycle: 'h24'
     };
     randomDate = new Date(faker.date.recent(10));
-  
-    // This is hot garbage, but it works, and I really don't care about efficency right now.
-    // Will this ever get optimized? Probably not  ¯\_(ツ)_/¯
 
     // Note: Intl.DateTimeFormat performs better than Date.toLocaleDateString
     const dateStr = new Intl.DateTimeFormat("en-US", options).format(randomDate).replace(/AM|PM|\,+/g, ''); 
-    //const dateStr = randomDate.toLocaleDateString("en-US", options).replace(' PM', '').replace(' AM', '');
+    //const dateStr = randomDate.toLocaleDateString("en-US", options).replace(' PM', '').replace(/AM|PM|\,+/g, '');
 
     const process = faker.random.number(32768); //Default max pid id for most linux distros 
     const user = faker.internet.userName();
@@ -59,7 +68,7 @@ Generate.prototype.line = function(callbackCount, callbackLimit, callback) {
     const port = faker.random.number(65535); //Upper limit of TCP port range
 
     // Note: For our purposes we don't care if the lines/dates aren't in chronological order
-    const formatedLine = `${dateStr} izxvps sshd[${process}]: Failed password for ${user} from ${ip} port ${port} ssh2`;
+    const formatedLine = `${dateStr} izxvps sshd[${process}]: Failed password for ${user} from ${ip} port ${port} ssh2`;       
     fs.appendFile(self.path, formatedLine + '\n', (err) => {
         if (err) throw err;
     });
@@ -69,7 +78,14 @@ Generate.prototype.line = function(callbackCount, callbackLimit, callback) {
 	return
     } else {
         self.callbackAccumulatorCount++;
-        self.line(self.callbackAccumulatorCount, callbackLimit);
+
+        if (typeof interval !== 'undefined') {
+            setTimeoutPromise(interval, true).then ((value) => {
+                if (value === true) self.line(self.callbackAccumulatorCount, callbackLimit, interval);
+            });
+        } else {
+            self.line(self.callbackAccumulatorCount, callbackLimit);
+        }
     }
 };
 
