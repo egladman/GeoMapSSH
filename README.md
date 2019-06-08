@@ -19,20 +19,37 @@ nvm use
 npm install
 ```
 
-## How to use
+## Quick Start
 
-### Simple
+### Basic
 
-Run the following command:
+Launch app
+
 ```
 npm start
 ```
 
 ### Advanced
 
-When overwriting the default port it's currently necessary to update the value in `public/index.html`
+Lint
 
 ```
-npm start -- -l docs/example -p 3030
+npm run lint
+```
+
+Create test file
+
+```
+npm test
+```
+
+Launch app
+
+```
+npm run start-dev
 npm start -- --log docs/example --port 3030
 ```
+
+*Note:* When overwriting the default port it's currently necessary to update the value in `public/index.html`
+
+
